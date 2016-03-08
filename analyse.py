@@ -35,7 +35,10 @@ offset = (140, 60)
 bg_file = 'jupiter_08032016_0046_bg'
 fg_file = 'jupiter_08032016_0045'
 
+threshold = 0.85 # no idea why
+
 # Open files
+print('Reading files...')
 bg = fits.open(bg_file)
 jupiter_raw = fits.open(fg_file)
 
@@ -50,12 +53,14 @@ jupiter = [_data - bg_med for _data in jupiter_raw[0].data]
 # Cut around io (man)
 io = [jup[offset[0]:offset[0]+40, offset[1]:offset[1]+40] for jup in jupiter]
 
+print('Locating speckles...')
 # Find maximum
 # argmax returns a single index, unravel converts it into x,y
 maxis_dummy = [np.unravel_index(np.argmax(_io), _io.shape) for _io in io]
 # try to optimize the maximum
 maxis = np.array([optimize_max_dummy(io[i], maxis_dummy[i][0], maxis_dummy[i][1])
                   for i in range(len(io))])
+maxs = [np.max(_io) for _io in io]
 # convert maximum into absolute positions
 maxis_abs = maxis + np.array(offset)
 minx = np.min(maxis_abs[:,0])
@@ -63,30 +68,21 @@ miny = np.min(maxis_abs[:,1])
 deltax = np.max(maxis_abs[:,0]) - minx 
 deltay = np.max(maxis_abs[:,1]) - miny
 
-# plt.ioff()
-# for i in range(10):#len(maxis)):
-#     plt.cla()
-#     plt.imshow(jupiter[i], interpolation='none')
-#     plt.plot(maxis_abs[i][1], maxis_abs[i][0], 'ro')
-#     plt.show()
-
 # Big array that contains everything
-stacked = [np.zeros(np.array(jupiter[0].shape))
-           for i in range(len(jupiter))]
+cube = [np.zeros(np.array(jupiter[0].shape))
+        for i in range(len(jupiter))]
 width, height = jupiter[0].shape
 for i in range(len(jupiter)):
-    print(maxis_abs[i][0] - minx, maxis_abs[i][1] - miny)
-
     rolled_x = np.roll(jupiter[i], -(maxis_abs[i][0] - minx), axis=0)
-    stacked[i] = np.roll(rolled_x,  -(maxis_abs[i][1] - miny), axis=1)
-   
-    # stacked[:width, :height] += jupiter[i]
+    cube[i] = np.roll(rolled_x,  -(maxis_abs[i][1] - miny), axis=1)
 
-# for i in range(10):
-#     plt.figure()
-#     plt.imshow(stacked[i], interpolation='none')
-plt.imshow(np.sum(stacked, axis=0), interpolation='none')
+# Darwin's time
+print('Keeping most luminous speckles...')
+stacked = np.zeros(jupiter[0].shape)
+percentile = np.percentile(maxs, 100*threshold)
+for i in range(len(cube)):
+    if maxs[i] > percentile :
+        stacked += cube[i]
+
+plt.imshow(stacked, interpolation='none')
 plt.show()
-    
-        
-    
