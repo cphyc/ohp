@@ -3,10 +3,41 @@ import numpy as np
 from astropy.io import fits
 import matplotlib.pyplot as plt
 from astropy.modeling import models, fitting
-plt.ion()
+
+
+def optimize_max_dummy(image, x_guess, y_guess):
+    return x_guess, y_guess
+
+def optimize_max_barycentre(image, x_guess, y_guess):
+    r = 10
+    x_bar = 0
+    y_bar = 0
+    tot = 0
+    for i in range(-r, +r):
+        for j in range(-r, +r):
+            if i**2 + j**2 > r**2:
+                break
+
+            x_bar += image[x_guess+i,y_guess+j]*i
+            y_bar += image[x_guess+i,y_guess+j]*j
+            tot += image[x_guess+i,y_guess+j]
+    x_bar /= tot
+    y_bar /= tot
+
+    return (int(x_bar + x_guess), int(y_bar + y_guess))
+
+# Parameters
+# offset = (140, 55)
+# bg_file = 'jupiter_08032016_0040_bg'
+# fg_file = 'jupiter_08032016_0039'
+
+offset = (140, 60)
+bg_file = 'jupiter_08032016_0046_bg'
+fg_file = 'jupiter_08032016_0045'
+
 # Open files
-bg = fits.open('jupiter_08032016_0040_bg')
-jupiter_raw = fits.open('jupiter_08032016_0039')
+bg = fits.open(bg_file)
+jupiter_raw = fits.open(fg_file)
 
 # Take the median
 bg_med = np.median(bg[0].data, axis=0)
@@ -17,11 +48,15 @@ jupiter = [_data - bg_med for _data in jupiter_raw[0].data]
 # plt.imshow(jupiter[0], interpolation='none')
 
 # Cut around io (man)
-offset = (140, 55)
 io = [jup[offset[0]:offset[0]+40, offset[1]:offset[1]+40] for jup in jupiter]
 
 # Find maximum
-maxis = np.array([np.unravel_index(np.argmax(_io), _io.shape) for _io in io])
+# argmax returns a single index, unravel converts it into x,y
+maxis_dummy = [np.unravel_index(np.argmax(_io), _io.shape) for _io in io]
+# try to optimize the maximum
+maxis = np.array([optimize_max_dummy(io[i], maxis_dummy[i][0], maxis_dummy[i][1])
+                  for i in range(len(io))])
+# convert maximum into absolute positions
 maxis_abs = maxis + np.array(offset)
 minx = np.min(maxis_abs[:,0])
 miny = np.min(maxis_abs[:,1])
@@ -31,13 +66,27 @@ deltay = np.max(maxis_abs[:,1]) - miny
 # plt.ioff()
 # for i in range(10):#len(maxis)):
 #     plt.cla()
-#     plt.imshow(jupiter[i])
+#     plt.imshow(jupiter[i], interpolation='none')
 #     plt.plot(maxis_abs[i][1], maxis_abs[i][0], 'ro')
 #     plt.show()
 
-# Big array that contains everything
-stacked = np.zeros(np.array(jupiter[0].shape) + np.array([deltax, deltay]))
+# Big array that contains everything
+stacked = [np.zeros(np.array(jupiter[0].shape))
+           for i in range(len(jupiter))]
 width, height = jupiter[0].shape
 for i in range(len(jupiter)):
-    stacked[maxis_abs[i][0] - minx:maxis_abs[i][0] - minx + width,
-            maxis_abs[i][1] - miny:maxis_abs[i][1] - miny + height] += jupiter[i]
+    print(maxis_abs[i][0] - minx, maxis_abs[i][1] - miny)
+
+    rolled_x = np.roll(jupiter[i], -(maxis_abs[i][0] - minx), axis=0)
+    stacked[i] = np.roll(rolled_x,  -(maxis_abs[i][1] - miny), axis=1)
+   
+    # stacked[:width, :height] += jupiter[i]
+
+# for i in range(10):
+#     plt.figure()
+#     plt.imshow(stacked[i], interpolation='none')
+plt.imshow(np.sum(stacked, axis=0), interpolation='none')
+plt.show()
+    
+        
+    
