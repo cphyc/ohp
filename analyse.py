@@ -84,5 +84,5 @@ for i in range(len(cube)):
     if maxs[i] > percentile :
         stacked += cube[i]
 
-plt.imshow(stacked, interpolation='none')
+plt.imshow(stacked, interpolation='none', cmap="gray")
 plt.show()
